@@ -57,6 +57,9 @@ function bigint.new(num)
     end
 
     setmetatable(self, {
+        __tostring = function(big)
+            return bigint.unserialize(big, "string")
+        end,
         __add = function(lhs, rhs)
             return bigint.add(lhs, rhs)
         end,
@@ -562,12 +565,12 @@ function bigint.divide_raw(big1, big2)
 
                 -- Append the factor to the result
                 if (factor == 10) then
+error("...", "stop here to debug")
                     -- Fixes a weird bug that introduces a new bug if fixed by
                     -- changing the comparison in the while loop to "<="
                     result.digits[#result.digits] = 1
                     result.digits[#result.digits + 1] = 0
 --print("...", "ba", factor)
---error("...", "BA stop here to debug")
                 else
 --print("...", "bb", factor)
                     result.digits[#result.digits + 1] = factor
