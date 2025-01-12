@@ -36,7 +36,49 @@ function bigint.zero_sign(big)
 	return big
 end
 
-local named_powers = require("named-powers-of-ten")
+
+local bigint_mt = {
+        __tostring = function(lhs)
+            return bigint.tostring(lhs, "string")
+        end,
+        __add = function(lhs, rhs)
+            return bigint.add(lhs, bigint.auto(rhs))
+        end,
+        __unm = function(lhs)
+            if (lhs.sign == "+") then
+                lhs.sign = "-"
+            else
+                lhs.sign = "+"
+            end
+            return lhs
+        end,
+        __sub = function(lhs, rhs)
+            return bigint.subtract(lhs, bigint.auto(rhs))
+        end,
+        __mul = function(lhs, rhs)
+            return bigint.multiply(lhs, bigint.auto(rhs))
+        end,
+        __div = function(lhs, rhs)
+            return bigint.divide(lhs, bigint.auto(rhs))
+        end,
+        __mod = function(lhs, rhs)
+            local result, remainder = bigint.divide(lhs, bigint.auto(rhs))
+            return result
+        end,
+        __pow = function(lhs, rhs)
+		return bigint.exponentiate(lhs, bigint.auto(rhs))
+        end
+    }
+
+function bigint.is_bigint(big)
+	return type(big) == "table" and getmetatable(big) == bigint_mt
+end
+function bigint.auto(num)
+	if bigint.is_bigint(num) then
+		return num
+	end
+	return bigint.new(num)
+end
 
 -- Create a new bigint or convert a number or string into a big
 -- Returns an empty, positive bigint if no number or string is given
@@ -56,39 +98,7 @@ function bigint.new(num)
         return newint
     end
 
-    setmetatable(self, {
-        __tostring = function(big)
-            return bigint.unserialize(big, "string")
-        end,
-        __add = function(lhs, rhs)
-            return bigint.add(lhs, rhs)
-        end,
-        __unm = function()
-            if (self.sign == "+") then
-                self.sign = "-"
-            else
-                self.sign = "+"
-            end
-            return self
-        end,
-        __sub = function(lhs, rhs)
-            return bigint.subtract(lhs, rhs)
-        end,
-        __mul = function(lhs, rhs)
-            return bigint.multiply(lhs, rhs)
-        end,
-        __div = function(lhs, rhs)
-            return bigint.divide(lhs, rhs)
-        end,
-        __mod = function(lhs, rhs)
-            local result, remainder = bigint.divide(lhs, rhs)
-            return result
-        end,
-        __pow = function(lhs, rhs)
-            return bigint.exponentiate(lhs, rhs)
-        end
-    })
-
+    setmetatable(self, bigint_mt)
     if (num) then
         local num_string = tostring(num)
         for digit in string.gmatch(num_string, "[0-9]") do
@@ -138,6 +148,20 @@ function bigint.abs(big)
     return result
 end
 
+function bigint.tostring(big)
+    bigint.check(big)
+
+    local num = ""
+    if big.sign == "-" then
+        num = "-"
+    end
+    local floor = math.floor
+    for _, digit in pairs(big.digits) do
+        num = num .. floor(digit) -- lazy way of getting rid of .0$
+    end
+    return num
+end
+
 -- Convert a big to a number or string
 function bigint.unserialize(big, output_type, precision)
     bigint.check(big)
@@ -156,9 +180,7 @@ function bigint.unserialize(big, output_type, precision)
         -- Unserialization to a string or number requires reconstructing the
         -- entire number
 
-        for _, digit in pairs(big.digits) do
-            num = num .. math.floor(digit) -- lazy way of getting rid of .0$
-        end
+        num = bigint.tostring(big)
 
         if ((output_type == nil)
         or (output_type == "number")
@@ -196,6 +218,8 @@ function bigint.unserialize(big, output_type, precision)
 
             local name
             local walkback = 0 -- Used to enumerate "ten", "hundred", etc
+
+local named_powers = require("named-powers-of-ten")
 
             -- Walk backwards in the index of named_powers starting at the
             -- number of digits of the input until the first value is found
