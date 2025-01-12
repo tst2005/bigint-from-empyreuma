@@ -39,8 +39,17 @@ end
 
 local bigint_mt = {
         __tostring = function(lhs)
-            return bigint.tostring(lhs, "string")
+		return bigint.tostring(lhs, "string")
         end,
+	__eq = function(lhs,rhs)
+		return bigint.compare(lhs, bigint.auto(rhs), "==")
+	end,
+	__lt = function(lhs,rhs)
+		return bigint.compare(lhs, bigint.auto(rhs), "<")
+        end,
+	__le = function(lhs,rhs)
+		return bigint.compare(lhs, bigint.auto(rhs), "<=")
+	end,
         __add = function(lhs, rhs)
             return bigint.add(lhs, bigint.auto(rhs))
         end,
