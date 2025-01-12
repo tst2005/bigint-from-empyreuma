@@ -112,13 +112,16 @@ function bigint.check(big, force)
         end
     end
 
---    if bigint.cleanable(big) then
---        --print("bigint.cleanable:")
---        --print("  before:", tprint(big))
---        bigint.clean(big)
---        --print("  after :", tprint(big))
---    end
-    assert(not(bigint.cleanable(big)), "bigint has leading zeroes")
+--[[
+    if bigint.cleanable(big) then
+        --print("WORKAROUND, bigint.cleanable:")
+	--local tprint = require "mini.tprint"
+        --print("  before:", tprint(big))
+        bigint.clean(big)
+        --print("  after :", tprint(big))
+    end
+    --assert(not(bigint.cleanable(big)), "bigint has leading zeroes")
+]]--
 
     return true
 end
@@ -373,7 +376,6 @@ function bigint.add(big1, big2)
     return result
 end
 function bigint.subtract(big1, big2)
-print("bigint.subtract")
     -- Type checking is done by bigint.compare in bigint.add
     -- Subtracting is like adding a negative
     local big2_local = big2:clone()
@@ -514,53 +516,48 @@ function bigint.divide_raw(big1, big2)
         -- Walk left to right among digits in the dividend, like in long
         -- division
         for _, digit in pairs(big1.digits) do
-print("loop", _, digit, "result=", tprint(result), "dividend=", tprint(dividend))
+--print("loop", _, digit, "result=", tprint(result), "dividend=", tprint(dividend))
 
             dividend.digits[#dividend.digits + 1] = digit
             bigint.clean(dividend)
 
-print("compare(dividend:", bigint.unserialize(dividend), "< divisor:", bigint.unserialize(divisor), ")")
+--print("compare(dividend:", bigint.unserialize(dividend), "< divisor:", bigint.unserialize(divisor), ")")
             -- The dividend is smaller than the divisor, so a zero is appended
             -- to the result and the loop ends
             if (bigint.compare(dividend, divisor, "<")) then -- origin:"<"
-print(".", "a")
+--print(".", "a")
                 if (#result.digits > 0) then -- Don't add leading zeroes
-print("..", "aa", bigint.unserialize(result))
+--print("..", "aa", bigint.unserialize(result))
                     result.digits[#result.digits + 1] = 0
-print("..", "aa", bigint.unserialize(result))
+--print("..", "aa", bigint.unserialize(result))
                 end
 
-elseif (bigint.compare(dividend, big2, "==")) then
+            elseif (bigint.compare(dividend, big2, "==")) then
 		factor = 1
 		result.digits[#result.digits + 1] = factor
 		dividend = bigint.new(0)
             else
-print(".", "b")
+--print(".", "b")
                 -- Find the maximum number of divisors that fit into the
                 -- dividend
                 factor = 1
-print("Find the maximum number of divisors that fit into the dividend")
-print("while (bigint.compare(divisor, dividend, \"<\")) do")
-print("divisor=", tprint(divisor))
-print("dividend=", tprint(dividend))
-bigint.clean(dividend)
-
---factor= 0       divisor=        4       dividend=       0
---factor= 1       divisor=        8       dividend=       0
---avoid overflow
---..      factor= 1       divisor=        8       dividend=       0
+--print("Find the maximum number of divisors that fit into the dividend")
+--print("while (bigint.compare(divisor, dividend, \"<\")) do")
+--print("divisor=", tprint(divisor))
+--print("dividend=", tprint(dividend))
+                bigint.clean(dividend)
 
                 while (bigint.compare(divisor, dividend, "<")) do -- orig <=
-print("factor=", factor, "divisor=", bigint.unserialize(divisor), "dividend=", bigint.unserialize(dividend))
+--print("factor=", factor, "divisor=", bigint.unserialize(divisor), "dividend=", bigint.unserialize(dividend))
 			local newdivisor = bigint.add(divisor, big2)
 			if bigint.compare(newdivisor,dividend,">") then
-print("avoid overflow")
+--print("avoid overflow")
 				break
 			end
 			divisor = newdivisor
 			factor = factor + 1
                 end
-print("..", "factor=", factor, "divisor=", bigint.unserialize(divisor), "dividend=", bigint.unserialize(dividend))
+--print("..", "factor=", factor, "divisor=", bigint.unserialize(divisor), "dividend=", bigint.unserialize(dividend))
 --		assert(bigint.unserialize(dividend)<=bigint.unserialize(divisor), "dividend>divisor")
 
                 -- Append the factor to the result
@@ -569,13 +566,13 @@ print("..", "factor=", factor, "divisor=", bigint.unserialize(divisor), "dividen
                     -- changing the comparison in the while loop to "<="
                     result.digits[#result.digits] = 1
                     result.digits[#result.digits + 1] = 0
-print("...", "ba", factor)
+--print("...", "ba", factor)
 --error("...", "BA stop here to debug")
                 else
-print("...", "bb", factor)
+--print("...", "bb", factor)
                     result.digits[#result.digits + 1] = factor
                 end
-print("..", "dividend = ", bigint.unserialize(dividend))
+--print("..", "dividend = ", bigint.unserialize(dividend))
 		assert(factor <= 10, "factor > 10, case not implemented, need code to inject factor in result.digits")
 
                 -- Subtract the divisor from the dividend to obtain the
@@ -585,31 +582,27 @@ print("..", "dividend = ", bigint.unserialize(dividend))
                 dividend = bigint.subtract(dividend, divisor)
 
 if dividend.sign == "-" then
-print("workaround!", bigint.unserialize(dividend), tprint(dividend))
+print("INTERNAL workaround to fix dividend sign", bigint.unserialize(dividend), tprint(dividend))
 	dividend.sign = "+"
 end
 if bigint.compare(dividend, big2, "==") then
-print("WORKAROUND2!")
+error("FAILURE: dividend is equal to big2")
 --	dividend=bigint.new(0)
 --	result.digits[#result.digits]=result.digits[#result.digits]+1
 end
 
---print("..", "(divisor-big2) =",
---bigint.unserialize(divisor), "-", bigint.unserialize(big2)
---)
---print("..", "dividend = dividend - (divisor-big2)")
-print("..", "dividend = dividend - divisor")
-print("..", "dividend = ", bigint.unserialize(dividend))
+--print("..", "dividend = dividend - divisor")
+--print("..", "dividend = ", bigint.unserialize(dividend))
 
-print(".", "c1", tprint(divisor))
+--print(".", "c1", tprint(divisor))
                 -- Reset the divisor
                 divisor = big2:clone()
-print(".", "c2", tprint(divisor))
+--print(".", "c2", tprint(divisor))
             end
-print("dividend<0 ?", bigint.unserialize(dividend), tprint(dividend), (bigint.unserialize(dividend) < 0) and "WARN" or "ok")
+--print("dividend<0 ?", bigint.unserialize(dividend), tprint(dividend), (bigint.unserialize(dividend) < 0) and "WARN" or "ok")
 
         end
-print("z")
+--print("z")
         -- The remainder of the final loop is returned as the function's
         -- overall remainder
         return result, dividend
