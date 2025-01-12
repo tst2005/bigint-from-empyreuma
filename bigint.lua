@@ -8,6 +8,34 @@ local strict = true
 
 local bigint = {}
 
+-- 00123 is cleanable to 123
+function bigint.cleanable(big)
+	local digits = big.digits
+	return #digits > 1 and digits[1] == 0
+end
+
+function bigint.clean(big)
+	-- Strip leading zeroes if any, but not if 0 is the only digit
+	while (#big.digits > 1) and (big.digits[1] == 0) do
+		table.remove(big.digits, 1)
+	end
+	return big
+end
+function bigint.is_zero(big) -- check if equals to zero (even if cleanable)
+	for i, digit in ipairs(big.digits) do
+		if digit ~= 0 then
+			return false
+		end
+	end
+	return true
+end
+function bigint.zero_sign(big)
+	if bigint.is_zero(big) then
+		big.sign = "+"
+	end
+	return big
+end
+
 local named_powers = require("named-powers-of-ten")
 
 -- Create a new bigint or convert a number or string into a big
@@ -83,6 +111,15 @@ function bigint.check(big, force)
             assert(digit < 10, digit .. " is greater than or equal to 10")
         end
     end
+
+--    if bigint.cleanable(big) then
+--        --print("bigint.cleanable:")
+--        --print("  before:", tprint(big))
+--        bigint.clean(big)
+--        --print("  after :", tprint(big))
+--    end
+    assert(not(bigint.cleanable(big)), "bigint has leading zeroes")
+
     return true
 end
 
@@ -301,9 +338,10 @@ function bigint.subtract_raw(big1, big2)
 
 
     -- Strip leading zeroes if any, but not if 0 is the only digit
-    while (#result.digits > 1) and (result.digits[1] == 0) do
-        table.remove(result.digits, 1)
-    end
+--    while (#result.digits > 1) and (result.digits[1] == 0) do
+--        table.remove(result.digits, 1)
+--    end
+    bigint.clean(result)
 
     return result
 end
@@ -311,31 +349,31 @@ end
 -- FRONTEND: Addition and subtraction operations, accounting for signs
 function bigint.add(big1, big2)
     -- Type checking is done by bigint.compare
-
     local result
 
     -- If adding numbers of different sign, subtract the smaller sized one from
     -- the bigger sized one and take the sign of the bigger sized one
     if (big1.sign ~= big2.sign) then
-        if (bigint.compare(bigint.abs(big1), bigint.abs(big2), ">")) then
-            result = bigint.subtract_raw(big1, big2)
-            result.sign = big1.sign
-        else
-            result = bigint.subtract_raw(big2, big1)
-            result.sign = big2.sign
+        if (bigint.compare(bigint.abs(big1), bigint.abs(big2), "<")) then
+            big1, big2 = big2, big1
         end
+        result = bigint.subtract_raw(big1, big2)
+        result.sign = big1.sign
+        bigint.zero_sign(result)
 
-    elseif (big1.sign == "+") and (big2.sign == "+") then
+    elseif big1.sign == "-" then
         result = bigint.add_raw(big1, big2)
+        result.sign = big1.sign
+        bigint.zero_sign(result)
 
-    elseif (big1.sign == "-") and (big2.sign == "-") then
+    else -- elseif big1.sign == "+" then
         result = bigint.add_raw(big1, big2)
-        result.sign = "-"
     end
 
     return result
 end
 function bigint.subtract(big1, big2)
+print("bigint.subtract")
     -- Type checking is done by bigint.compare in bigint.add
     -- Subtracting is like adding a negative
     local big2_local = big2:clone()
@@ -476,22 +514,54 @@ function bigint.divide_raw(big1, big2)
         -- Walk left to right among digits in the dividend, like in long
         -- division
         for _, digit in pairs(big1.digits) do
-            dividend.digits[#dividend.digits + 1] = digit
+print("loop", _, digit, "result=", tprint(result), "dividend=", tprint(dividend))
 
+            dividend.digits[#dividend.digits + 1] = digit
+            bigint.clean(dividend)
+
+print("compare(dividend:", bigint.unserialize(dividend), "< divisor:", bigint.unserialize(divisor), ")")
             -- The dividend is smaller than the divisor, so a zero is appended
             -- to the result and the loop ends
-            if (bigint.compare(dividend, divisor, "<")) then
+            if (bigint.compare(dividend, divisor, "<")) then -- origin:"<"
+print(".", "a")
                 if (#result.digits > 0) then -- Don't add leading zeroes
+print("..", "aa", bigint.unserialize(result))
                     result.digits[#result.digits + 1] = 0
+print("..", "aa", bigint.unserialize(result))
                 end
+
+elseif (bigint.compare(dividend, big2, "==")) then
+		factor = 1
+		result.digits[#result.digits + 1] = factor
+		dividend = bigint.new(0)
             else
+print(".", "b")
                 -- Find the maximum number of divisors that fit into the
                 -- dividend
-                factor = 0
-                while (bigint.compare(divisor, dividend, "<=")) do
-                    divisor = bigint.add(divisor, big2)
-                    factor = factor + 1
+                factor = 1
+print("Find the maximum number of divisors that fit into the dividend")
+print("while (bigint.compare(divisor, dividend, \"<\")) do")
+print("divisor=", tprint(divisor))
+print("dividend=", tprint(dividend))
+bigint.clean(dividend)
+
+--factor= 0       divisor=        4       dividend=       0
+--factor= 1       divisor=        8       dividend=       0
+--avoid overflow
+--..      factor= 1       divisor=        8       dividend=       0
+
+                while (bigint.compare(divisor, dividend, "<")) do -- orig <=
+print("factor=", factor, "divisor=", bigint.unserialize(divisor), "dividend=", bigint.unserialize(dividend))
+			local newdivisor = bigint.add(divisor, big2)
+			if bigint.compare(newdivisor,dividend,">") then
+print("avoid overflow")
+				break
+			end
+			divisor = newdivisor
+			factor = factor + 1
                 end
+print("..", "factor=", factor, "divisor=", bigint.unserialize(divisor), "dividend=", bigint.unserialize(dividend))
+--		assert(bigint.unserialize(dividend)<=bigint.unserialize(divisor), "dividend>divisor")
 
                 -- Append the factor to the result
                 if (factor == 10) then
@@ -499,21 +569,47 @@ function bigint.divide_raw(big1, big2)
                     -- changing the comparison in the while loop to "<="
                     result.digits[#result.digits] = 1
                     result.digits[#result.digits + 1] = 0
+print("...", "ba", factor)
+--error("...", "BA stop here to debug")
                 else
+print("...", "bb", factor)
                     result.digits[#result.digits + 1] = factor
                 end
+print("..", "dividend = ", bigint.unserialize(dividend))
+		assert(factor <= 10, "factor > 10, case not implemented, need code to inject factor in result.digits")
 
                 -- Subtract the divisor from the dividend to obtain the
                 -- remainder, which is the new dividend for the next loop
-                dividend = bigint.subtract(dividend,
-                                           bigint.subtract(divisor, big2))
+--                dividend = bigint.subtract(dividend,
+--                                           bigint.subtract(divisor, big2))
+                dividend = bigint.subtract(dividend, divisor)
 
+if dividend.sign == "-" then
+print("workaround!", bigint.unserialize(dividend), tprint(dividend))
+	dividend.sign = "+"
+end
+if bigint.compare(dividend, big2, "==") then
+print("WORKAROUND2!")
+--	dividend=bigint.new(0)
+--	result.digits[#result.digits]=result.digits[#result.digits]+1
+end
+
+--print("..", "(divisor-big2) =",
+--bigint.unserialize(divisor), "-", bigint.unserialize(big2)
+--)
+--print("..", "dividend = dividend - (divisor-big2)")
+print("..", "dividend = dividend - divisor")
+print("..", "dividend = ", bigint.unserialize(dividend))
+
+print(".", "c1", tprint(divisor))
                 -- Reset the divisor
                 divisor = big2:clone()
+print(".", "c2", tprint(divisor))
             end
+print("dividend<0 ?", bigint.unserialize(dividend), tprint(dividend), (bigint.unserialize(dividend) < 0) and "WARN" or "ok")
 
         end
-
+print("z")
         -- The remainder of the final loop is returned as the function's
         -- overall remainder
         return result, dividend
